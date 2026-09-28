@@ -1,1 +1,244 @@
-The requested file reference is not currently visible. Use files.search or files.list to rediscover the file, then retry with a returned ref_id or file_id.
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>تبدیل گفتار به متن</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#eef2f6; --surface:#ffffff; --ink:#10243e; --muted:#5a6b80;
+  --line:#d3dce6; --accent:#0e7c86; --accent-dark:#0a5c64; --rec:#c8372d;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  font-family:"Vazirmatn",Tahoma,sans-serif; background:var(--bg); color:var(--ink);
+  line-height:1.9; padding:32px 16px 48px;
+}
+main{max-width:720px; margin:0 auto}
+h1{font-size:2rem; font-weight:800; margin:0 0 4px}
+.lead{margin:0 0 24px; color:var(--muted)}
+.card{background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:20px; margin-bottom:16px}
+.card h2{font-size:1.05rem; margin:0 0 12px; font-weight:700}
+.row{display:flex; flex-wrap:wrap; gap:12px; align-items:center}
+label{font-weight:500}
+select,button,textarea,input[type=file]{font-family:inherit; font-size:1rem; color:inherit}
+select{padding:8px 12px; border:1px solid var(--line); border-radius:8px; background:#fff}
+.mic-wrap{display:flex; align-items:center; gap:16px; margin:16px 0}
+#micBtn{
+  position:relative; width:72px; height:72px; border-radius:50%; border:0; cursor:pointer;
+  background:var(--accent); color:#fff; display:grid; place-items:center; flex:none;
+}
+#micBtn:hover{background:var(--accent-dark)}
+#micBtn svg{width:30px; height:30px; fill:currentColor}
+#micBtn.on{background:var(--rec)}
+#micBtn.on::after{
+  content:""; position:absolute; inset:-8px; border-radius:50%;
+  border:3px solid var(--rec); opacity:.5; animation:ring 1.4s ease-out infinite;
+}
+@keyframes ring{from{transform:scale(.85);opacity:.6}to{transform:scale(1.25);opacity:0}}
+#status{margin:0; font-weight:500}
+#status.err{color:var(--rec)}
+textarea{
+  width:100%; min-height:240px; padding:14px; border:1px solid var(--line); border-radius:10px;
+  resize:vertical; line-height:2; background:#fbfcfd;
+}
+#interim{min-height:1.9em; margin:8px 0 0; color:var(--muted)}
+.actions{display:flex; flex-wrap:wrap; gap:8px; margin-top:12px}
+.btn{padding:8px 16px; border:1px solid var(--line); border-radius:8px; background:#fff; cursor:pointer}
+.btn:hover{border-color:var(--accent); color:var(--accent-dark)}
+.hint{margin:10px 0 0; font-size:.9rem; color:var(--muted)}
+audio{width:100%; margin-top:12px}
+:focus-visible{outline:3px solid #f2a93b; outline-offset:2px}
+#unsupported{display:none; background:#fdecea; border:1px solid var(--rec); color:#7a1f18; border-radius:10px; padding:12px 16px; margin-bottom:16px}
+@media (prefers-reduced-motion:reduce){#micBtn.on::after{animation:none}}
+@media (max-width:480px){h1{font-size:1.6rem} .card{padding:16px}}
+</style>
+</head>
+<body>
+<main>
+  <h1>تبدیل گفتار به متن</h1>
+  <p class="lead">صحبت کنید تا متن هم‌زمان نوشته شود. مناسب برای معلم‌ها و هر کسی که می‌خواهد صدا را سریع به متن تبدیل کند.</p>
+
+  <div id="unsupported" role="alert">
+    این مرورگر تشخیص گفتار را پشتیبانی نمی‌کند. برای بهترین نتیجه از Google Chrome یا Microsoft Edge استفاده کنید.
+  </div>
+
+  <section class="card" aria-labelledby="t-mic">
+    <h2 id="t-mic">ضبط با میکروفون</h2>
+    <div class="row">
+      <label for="lang">زبان گفتار</label>
+      <select id="lang">
+        <option value="fa-IR">فارسی</option>
+        <option value="en-US">English (US)</option>
+        <option value="en-GB">English (UK)</option>
+      </select>
+    </div>
+    <div class="mic-wrap">
+      <button id="micBtn" type="button" aria-label="شروع ضبط" aria-pressed="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15a4 4 0 0 0 4-4V6a4 4 0 0 0-8 0v5a4 4 0 0 0 4 4zm6-4a6 6 0 0 1-12 0H4a8 8 0 0 0 7 7.94V22h2v-3.06A8 8 0 0 0 20 11h-2z"/></svg>
+      </button>
+      <p id="status" aria-live="polite">برای شروع روی میکروفون بزنید.</p>
+    </div>
+
+    <label for="output">متن تشخیص‌داده‌شده (قابل ویرایش)</label>
+    <textarea id="output" dir="auto" placeholder="متن اینجا نوشته می‌شود..."></textarea>
+    <p id="interim" dir="auto" aria-hidden="true"></p>
+
+    <div class="actions">
+      <button class="btn" id="copyBtn" type="button">کپی متن</button>
+      <button class="btn" id="downloadBtn" type="button">ذخیره به‌صورت فایل متنی</button>
+      <button class="btn" id="clearBtn" type="button">پاک کردن متن</button>
+    </div>
+  </section>
+
+  <section class="card" aria-labelledby="t-file">
+    <h2 id="t-file">تشخیص از روی فایل صوتی</h2>
+    <input type="file" id="fileInput" accept="audio/*">
+    <audio id="player" controls hidden></audio>
+    <p class="hint">با پخش فایل، تشخیص گفتار هم‌زمان شروع می‌شود و با توقف یا پایان فایل متوقف می‌شود. مرورگر فقط از میکروفون صدا می‌گیرد؛ پس صدا باید از بلندگو پخش شود و در محیط ساکت باشید. با هدفون کار نمی‌کند.</p>
+  </section>
+
+  <p class="hint">این ابزار به میکروفون و اتصال اینترنت نیاز دارد و باید از طریق HTTPS (مثلاً GitHub Pages) یا localhost باز شود. مرورگر ممکن است صدا را برای پردازش به سرویس تشخیص گفتار خودش بفرستد.</p>
+</main>
+
+<script>
+(function(){
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var $ = function(id){ return document.getElementById(id); };
+  var micBtn=$('micBtn'), statusEl=$('status'), out=$('output'), interimEl=$('interim'),
+      langSel=$('lang'), player=$('player'), fileInput=$('fileInput');
+
+  var rec=null, wantRunning=false, startedByAudio=false, objectUrl=null;
+
+  function setStatus(msg, isErr){
+    statusEl.textContent = msg;
+    statusEl.className = isErr ? 'err' : '';
+  }
+  function setUi(on){
+    micBtn.classList.toggle('on', on);
+    micBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    micBtn.setAttribute('aria-label', on ? 'توقف ضبط' : 'شروع ضبط');
+  }
+
+  if(!SR){
+    $('unsupported').style.display='block';
+    micBtn.disabled=true;
+    micBtn.style.opacity='.5';
+    micBtn.style.cursor='not-allowed';
+    setStatus('تشخیص گفتار در این مرورگر در دسترس نیست.', true);
+  }
+
+  function appendText(t){
+    t = t.trim();
+    if(!t) return;
+    var sep = out.value && !/\s$/.test(out.value) ? ' ' : '';
+    out.value += sep + t;
+    out.scrollTop = out.scrollHeight;
+  }
+
+  function build(){
+    rec = new SR();
+    rec.lang = langSel.value;
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.onstart = function(){ setUi(true); setStatus('در حال گوش دادن... صحبت کنید.'); };
+    rec.onresult = function(e){
+      var interim = '';
+      for(var i=e.resultIndex; i<e.results.length; i++){
+        var r = e.results[i];
+        if(r.isFinal) appendText(r[0].transcript);
+        else interim += r[0].transcript;
+      }
+      interimEl.textContent = interim;
+    };
+    rec.onerror = function(e){
+      var msgs = {
+        'not-allowed':'دسترسی به میکروفون داده نشد. در تنظیمات مرورگر اجازه‌ی میکروفون را فعال کنید.',
+        'service-not-allowed':'سرویس تشخیص گفتار اجازه‌ی اجرا ندارد. صفحه را با HTTPS باز کنید.',
+        'audio-capture':'میکروفونی پیدا نشد. اتصال میکروفون را بررسی کنید.',
+        'network':'اتصال اینترنت برای تشخیص گفتار لازم است. اتصال را بررسی کنید.',
+        'language-not-supported':'این زبان در مرورگر شما پشتیبانی نمی‌شود.'
+      };
+      if(e.error === 'no-speech' || e.error === 'aborted') return;
+      wantRunning = false;
+      setStatus(msgs[e.error] || ('خطا در تشخیص گفتار: ' + e.error), true);
+    };
+    rec.onend = function(){
+      interimEl.textContent = '';
+      if(wantRunning){
+        try{ rec.start(); return; }catch(err){ /* falls through to stop */ }
+      }
+      wantRunning = false;
+      setUi(false);
+      if(!statusEl.className) setStatus('متوقف شد. برای ادامه دوباره میکروفون را بزنید.');
+    };
+  }
+
+  function start(){
+    if(!SR || wantRunning) return;
+    build();
+    wantRunning = true;
+    try{ rec.start(); }
+    catch(err){ wantRunning=false; setStatus('شروع تشخیص ممکن نشد. صفحه را دوباره بارگذاری کنید.', true); }
+  }
+  function stop(){
+    wantRunning = false;
+    startedByAudio = false;
+    if(rec){ try{ rec.stop(); }catch(err){} }
+  }
+
+  micBtn.addEventListener('click', function(){ wantRunning ? stop() : start(); });
+
+  langSel.addEventListener('change', function(){
+    if(wantRunning){ stop(); setTimeout(start, 350); }
+  });
+
+  // Audio file: play and recognize together
+  fileInput.addEventListener('change', function(){
+    var f = fileInput.files && fileInput.files[0];
+    if(!f) return;
+    if(objectUrl) URL.revokeObjectURL(objectUrl);
+    objectUrl = URL.createObjectURL(f);
+    player.src = objectUrl;
+    player.hidden = false;
+    setStatus('فایل آماده است. دکمه‌ی پخش را بزنید.');
+  });
+  player.addEventListener('play', function(){
+    if(SR && !wantRunning){ startedByAudio = true; start(); }
+  });
+  function audioStopped(){ if(startedByAudio) stop(); }
+  player.addEventListener('pause', audioStopped);
+  player.addEventListener('ended', audioStopped);
+
+  // Actions
+  $('copyBtn').addEventListener('click', function(){
+    var text = out.value;
+    if(!text){ setStatus('متنی برای کپی وجود ندارد.', true); return; }
+    var done = function(){ setStatus('متن کپی شد.'); };
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(done, function(){ out.select(); document.execCommand('copy'); done(); });
+    }else{
+      out.select(); document.execCommand('copy'); done();
+    }
+  });
+  $('clearBtn').addEventListener('click', function(){
+    out.value=''; interimEl.textContent=''; setStatus('متن پاک شد.'); out.focus();
+  });
+  $('downloadBtn').addEventListener('click', function(){
+    if(!out.value){ setStatus('متنی برای ذخیره وجود ندارد.', true); return; }
+    var blob = new Blob(['\ufeff' + out.value], {type:'text/plain;charset=utf-8'});
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'speech-to-text.txt';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+    setStatus('فایل ذخیره شد.');
+  });
+})();
+</script>
+</body>
+</html>
