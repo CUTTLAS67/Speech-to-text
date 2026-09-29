@@ -123,7 +123,7 @@ audio{width:100%; margin-top:12px}
   var micBtn=$('micBtn'), statusEl=$('status'), out=$('output'), interimEl=$('interim'),
       langSel=$('lang'), player=$('player'), fileInput=$('fileInput');
 
-  var rec=null, wantRunning=false, startedByAudio=false, objectUrl=null;
+  var rec=null, wantRunning=false, startedByAudio=false, objectUrl=null, isMobile=/Android|iPhone|iPad|iPod/i.test(navigator.userAgent), lastCommitted='';
 
   function setStatus(msg, isErr){
     statusEl.textContent = msg;
@@ -151,22 +151,49 @@ audio{width:100%; margin-top:12px}
     out.scrollTop = out.scrollHeight;
   }
 
+  function normalizeText(t){
+    return (t || '').replace(/[\\u200c\\u200f\\u200e]/g,' ').replace(/\\s+/g,' ').trim().toLowerCase();
+  }
+
   function build(local){
     rec = new SR();
     if(local){ try{ rec.processLocally = true; }catch(err){} }
     rec.lang = langSel.value;
-    rec.continuous = true;
+    // Mobile browsers are more reliable when each recognition session is short.
+    // continuous=true can cause Chrome/Android to emit the same final phrase twice.
+    rec.continuous = !isMobile;
     rec.interimResults = true;
-    rec.onstart = function(){ setUi(true); setStatus('در حال گوش دادن... صحبت کنید.'); };
+    rec.maxAlternatives = 1;
+
+    rec.onstart = function(){
+      setUi(true);
+      setStatus(isMobile ? 'در حال گوش دادن... بعد از هر جمله ادامه می‌دهد.' : 'در حال گوش دادن... صحبت کنید.');
+    };
+
     rec.onresult = function(e){
       var interim = '';
+      var finalParts = [];
       for(var i=e.resultIndex; i<e.results.length; i++){
         var r = e.results[i];
-        if(r.isFinal) appendText(r[0].transcript);
-        else interim += r[0].transcript;
+        var transcript = (r[0] && r[0].transcript) ? r[0].transcript.trim() : '';
+        if(!transcript) continue;
+        if(r.isFinal) finalParts.push(transcript);
+        else interim += (interim ? ' ' : '') + transcript;
+      }
+
+      // Only commit a final phrase once. Android/Chrome can emit an identical
+      // final result more than once, especially when continuous recognition ends.
+      for(var j=0; j<finalParts.length; j++){
+        var text = finalParts[j];
+        var normalized = normalizeText(text);
+        if(!normalized) continue;
+        if(normalized === lastCommitted) continue;
+        appendText(text);
+        lastCommitted = normalized;
       }
       interimEl.textContent = interim;
     };
+
     rec.onerror = function(e){
       var msgs = {
         'not-allowed':'دسترسی به میکروفون داده نشد. در تنظیمات مرورگر اجازه‌ی میکروفون را فعال کنید.',
@@ -179,12 +206,24 @@ audio{width:100%; margin-top:12px}
       wantRunning = false;
       setStatus(msgs[e.error] || ('خطا در تشخیص گفتار: ' + e.error), true);
     };
+
     rec.onend = function(){
       interimEl.textContent = '';
       if(wantRunning){
-        try{ rec.start(); return; }catch(err){ /* falls through to stop */ }
+        // Give the mobile speech service a moment to release the microphone
+        // before starting the next recognition session.
+        setTimeout(function(){
+          if(!wantRunning) return;
+          try{ rec.start(); }
+          catch(err){
+            setTimeout(function(){
+              if(!wantRunning) return;
+              try{ rec.start(); }catch(err2){}
+            }, 300);
+          }
+        }, isMobile ? 350 : 100);
+        return;
       }
-      wantRunning = false;
       setUi(false);
       if(!statusEl.className) setStatus('متوقف شد. برای ادامه دوباره میکروفون را بزنید.');
     };
@@ -239,13 +278,19 @@ audio{width:100%; margin-top:12px}
       if(local === null){ wantRunning = false; setUi(false); return; }
       build(local);
       try{ rec.start(); }
-      catch(err){ wantRunning=false; setUi(false); setStatus('شروع تشخیص ممکن نشد. صفحه را دوباره بارگذاری کنید.', true); }
+      catch(err){
+        setTimeout(function(){
+          if(!wantRunning) return;
+          try{ rec.start(); }
+          catch(err2){ wantRunning=false; setUi(false); setStatus('شروع تشخیص ممکن نشد. صفحه را دوباره بارگذاری کنید.', true); }
+        }, isMobile ? 400 : 150);
+      }
     });
   }
   function stop(){
     wantRunning = false;
     startedByAudio = false;
-    if(rec){ try{ rec.stop(); }catch(err){} }
+    if(rec){ try{ rec.abort(); }catch(err){ try{ rec.stop(); }catch(err2){} } }
   }
 
   micBtn.addEventListener('click', function(){ wantRunning ? stop() : start(); });
@@ -283,7 +328,7 @@ audio{width:100%; margin-top:12px}
     }
   });
   $('clearBtn').addEventListener('click', function(){
-    out.value=''; interimEl.textContent=''; setStatus('متن پاک شد.'); out.focus();
+    out.value=''; interimEl.textContent=''; lastCommitted=''; setStatus('متن پاک شد.'); out.focus();
   });
   $('downloadBtn').addEventListener('click', function(){
     if(!out.value){ setStatus('متنی برای ذخیره وجود ندارد.', true); return; }
